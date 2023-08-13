@@ -13,6 +13,12 @@ async fn main() {
     let url = spotify.get_authorize_url(false).unwrap();
     // This function requires the `cli` feature enabled.
     spotify.prompt_for_token(&url).await.unwrap();
+
+    // Pauses devices as proof the connection works.
+    for device in spotify.device().await.unwrap().into_iter() {
+        let id = device.id;
+        spotify.pause_playback(Some(&id.unwrap())).await.unwrap();
+    }
 }
 
 fn init_spotify() -> AuthCodeSpotify {
