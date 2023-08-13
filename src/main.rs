@@ -1,12 +1,7 @@
 use std::collections::HashMap;
 
-use chrono::Duration;
 use futures_util::StreamExt;
-use rspotify::{
-    model::{ArtistId, SavedTrack, TimeRange, TrackId},
-    prelude::*,
-    scopes, AuthCodeSpotify, Config, Credentials, OAuth, Token,
-};
+use rspotify::{model::TrackId, prelude::*, scopes, AuthCodeSpotify, Config, Credentials, OAuth};
 
 #[tokio::main]
 async fn main() {
@@ -23,7 +18,7 @@ async fn main() {
     // todo use streams, as this is awefully slow
     let all_saved_tracks = spotify
         .current_user_saved_tracks(None)
-        .take(200) // todo to delete
+        .take(2000) // todo to delete
         .collect::<Vec<_>>()
         .await
         .into_iter()
@@ -55,7 +50,7 @@ async fn main() {
     let playlist = spotify
         .user_playlist_create(
             user_id,
-            "It's a test",
+            "Auto Generated French Hip Hop Playlist",
             Some(true),
             Some(false),
             Some("Auto-Generated playlist containing music from the same genre"),
@@ -63,14 +58,16 @@ async fn main() {
         .await
         .unwrap();
 
-    let some_indie_tracks = genre_tracks
-        .get("indietronica")
+    let some_french_hip_hop_tracks = genre_tracks
+        .get("french hip hop")
         .unwrap()
-        .into_iter()
+        .iter()
         .map(|track_id| PlayableId::Track(track_id.clone()))
         .collect::<Vec<PlayableId>>();
 
-    spotify.playlist_add_items(playlist.id, some_indie_tracks, None);
+    let _ = spotify
+        .playlist_add_items(playlist.id, some_french_hip_hop_tracks, None)
+        .await;
 }
 
 fn init_spotify() -> AuthCodeSpotify {
