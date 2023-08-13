@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use chrono::Duration;
 use futures_util::StreamExt;
 use rspotify::{
     model::{ArtistId, SavedTrack, TimeRange, TrackId},
@@ -32,44 +33,44 @@ async fn main() {
 
     // Collect and save a list of all genre for each track's artists into a Hashmap
     for track_data in all_saved_tracks.into_iter() {
-        let track = track_data
-        .unwrap()
-        .track;
+        let track = track_data.unwrap().track;
 
         let track_id = track.id.unwrap();
 
-        let taid = track
-            .artists
-            .first()
-            .unwrap()
-            .id
-            .clone()
-            .unwrap();
+        let taid = track.artists.first().unwrap().id.clone().unwrap();
         let genres = spotify.artist(taid).await.unwrap().genres;
-        
+
         for genre in genres {
-            genre_tracks.entry(genre).or_insert(Vec::new()).push(track_id.clone());
+            genre_tracks
+                .entry(genre)
+                .or_insert(Vec::new())
+                .push(track_id.clone());
         }
     }
 
-    println!("{genre_tracks:?}");
+    for genres in genre_tracks.clone() {
+        println!("* Genre [{}] | Song count: {}", genres.0, genres.1.len())
+    }
+    let user_id = spotify.me().await.unwrap().id;
+    let playlist = spotify
+        .user_playlist_create(
+            user_id,
+            "It's a test",
+            Some(true),
+            Some(false),
+            Some("Auto-Generated playlist containing music from the same genre"),
+        )
+        .await
+        .unwrap();
 
-    // stream
-    //     .try_for_each_concurrent(10, |item| async move {
+    let some_indie_tracks = genre_tracks
+        .get("indietronica")
+        .unwrap()
+        .into_iter()
+        .map(|track_id| PlayableId::Track(track_id.clone()))
+        .collect::<Vec<PlayableId>>();
 
-    //         // let taid = item.track.artists.first().unwrap().id.unwrap();
-    //         if let Some(artist) = item.track.artists.first().take() {
-    //             taids.push(artist.id.unwrap());
-    //         }
-
-    //         // if let Some(id) = taid {
-    //         //     println!("{:?}", spotify.artist(ids).await.unwrap().genres);
-    //         // }
-
-    //         Ok(())
-    //     })
-    //     .await
-    //     .unwrap();
+    spotify.playlist_add_items(playlist.id, some_indie_tracks, None);
 }
 
 fn init_spotify() -> AuthCodeSpotify {
