@@ -24,15 +24,19 @@ async fn main() {
         .into_iter()
         .filter(|track| track.is_ok());
 
+    println!("saved tracks");
+
     let mut genre_tracks: HashMap<String, Vec<TrackId<'static>>> = HashMap::new();
 
     // Collect and save a list of all genre for each track's artists into a Hashmap
-    for track_data in all_saved_tracks.into_iter() {
+    for track_data in all_saved_tracks.into_iter().take(2932) {
         let track = track_data.unwrap().track;
 
         let track_id = track.id.unwrap();
 
         let taid = track.artists.first().unwrap().id.clone().unwrap();
+
+        // todo here I can keep a reference of the passed through artists .. 
         let genres = spotify.artist(taid).await.unwrap().genres;
 
         for genre in genres {
@@ -42,15 +46,16 @@ async fn main() {
                 .push(track_id.clone());
         }
     }
+    println!("track data");
 
-    for genres in genre_tracks.clone() {
-        println!("* Genre [{}] | Song count: {}", genres.0, genres.1.len())
-    }
+    // for genres in genre_tracks.clone() {
+    //     println!("* Genre [{}] | Song count: {}", genres.0, genres.1.len())
+    // }
     let user_id = spotify.me().await.unwrap().id;
     let playlist = spotify
         .user_playlist_create(
             user_id,
-            "Auto Generated French Hip Hop Playlist",
+            "Auto Generated uk dance Playlist",
             Some(true),
             Some(false),
             Some("Auto-Generated playlist containing music from the same genre"),
@@ -59,12 +64,12 @@ async fn main() {
         .unwrap();
 
     let some_french_hip_hop_tracks = genre_tracks
-        .get("french hip hop")
+        .get("uk dance")
         .unwrap()
         .iter()
         .map(|track_id| PlayableId::Track(track_id.clone()))
         .collect::<Vec<PlayableId>>();
-
+    println!("Some");
     let _ = spotify
         .playlist_add_items(playlist.id, some_french_hip_hop_tracks, None)
         .await;
