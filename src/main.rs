@@ -3,6 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use futures_util::lock::Mutex;
 use futures_util::StreamExt;
+use rspotify::model::ArtistId;
 use rspotify::{model::TrackId, prelude::*, scopes, AuthCodeSpotify, Config, Credentials, OAuth};
 
 #[tokio::main]
@@ -21,28 +22,33 @@ async fn main() {
     // Create a shared state for genre_tracks
     let genre_tracks: Arc<Mutex<HashMap<String, Vec<TrackId>>>> =
         Arc::new(Mutex::new(HashMap::new()));
+    
+    // Create a shared state for genre_tracks
+    let artist_ids: Arc<Mutex<Vec<ArtistId>>> =
+        Arc::new(Mutex::new(Vec::new()));
 
     spotify
         .current_user_saved_tracks(None)
         .for_each_concurrent(None, |t| {
-            println!("Steaming through ...");
             let spotify = spotify.clone();
-            let genre_tracks = Arc::clone(&genre_tracks); // Clone the Arc for the shared state
+            let artist_ids = Arc::clone(&artist_ids); // Clone the Arc for the shared state
 
             async move {
                 if let Ok(track_data) = t {
                     let track = track_data.track;
                     let track_id = track.id.unwrap();
                     let artist_id = track.artists.first().unwrap().id.clone().unwrap();
-
-                    for genre in spotify.artist(artist_id).await.unwrap().genres {
-                        genre_tracks
-                            .lock()
-                            .await
-                            .entry(genre)
-                            .or_default()
-                            .push(track_id.clone())
-                    }
+                    
+                    artist_ids.lock().await.push(artist_id);
+                         
+                    // for genre in spotify.artist(artist_id).await.unwrap().genres {
+                    //     genre_tracks
+                    //         .lock()
+                    //         .await
+                    //         .entry(genre)
+                    //         .or_default()
+                    //         .push(track_id.clone())
+                    // }
                 }
             }
         })
@@ -60,10 +66,10 @@ async fn main() {
     let playlist = spotify
         .user_playlist_create(
             user_id,
-            &format!("Auto Generated <{input}> Playlist"),
+            &format!("Programatically generated [{}] Playlist", input.to_uppercase()),
             Some(true),
             Some(false),
-            Some("Auto-Generated playlist containing music from the same genre"),
+            Some("Programatically generated playlist containing music from the same genre .. work in progress. It does have some major issues sorting genres as Spotify only attach the genre to an artist, a not the song itself."),
         )
         .await
         .unwrap();
