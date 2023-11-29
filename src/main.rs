@@ -1,11 +1,9 @@
-use std::collections::HashMap;
 use std::io;
+use std::{collections::HashMap, sync::Arc};
 
-use rspotify::{
-    model::TrackId,
-    prelude::*,
-    scopes, AuthCodeSpotify, Config, Credentials, OAuth,
-};
+use futures_util::lock::Mutex;
+use futures_util::StreamExt;
+use rspotify::{model::TrackId, prelude::*, scopes, AuthCodeSpotify, Config, Credentials, OAuth};
 
 #[tokio::main]
 async fn main() {
@@ -20,37 +18,38 @@ async fn main() {
     // This function requires the `cli` feature enabled.
     spotify.prompt_for_token(&url).await.unwrap();
 
-    let mut i = 0;
-    let mut genre_tracks: HashMap<String, Vec<TrackId<'static>>> = HashMap::new();
+    // Create a shared state for genre_tracks
+    let genre_tracks: Arc<Mutex<HashMap<String, Vec<TrackId>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
 
-    // I should use concurrency here and just poll x pages at the same time
-    while let Ok(paginated_tracks) = spotify
-        .current_user_saved_tracks_manual(None, Some(100), Some(i))
-        .await
-    {
-        for t in paginated_tracks.items {
-            let track = t.track;
-            let track_id = track.id.unwrap();
+    spotify
+        .current_user_saved_tracks(None)
+        .for_each_concurrent(None, |t| {
+            println!("Steaming through ...");
+            let spotify = spotify.clone();
+            let genre_tracks = Arc::clone(&genre_tracks); // Clone the Arc for the shared state
 
-            let artist_id = track.artists.first().unwrap().id.clone().unwrap();
+            async move {
+                if let Ok(track_data) = t {
+                    let track = track_data.track;
+                    let track_id = track.id.unwrap();
+                    let artist_id = track.artists.first().unwrap().id.clone().unwrap();
 
-            spotify
-                .artist(artist_id)
-                .await
-                .unwrap()
-                .genres
-                .into_iter()
-                .for_each(|genre| {
-                    genre_tracks
-                        .entry(genre)
-                        .or_default()
-                        .push(track_id.clone())
-                });
-        }
-        i += 100;
-    }
+                    for genre in spotify.artist(artist_id).await.unwrap().genres {
+                        genre_tracks
+                            .lock()
+                            .await
+                            .entry(genre)
+                            .or_default()
+                            .push(track_id.clone())
+                    }
+                }
+            }
+        })
+        .await;
 
-    for genres in genre_tracks.clone() {
+    let genre_lock = genre_tracks.lock().await;
+    for genres in genre_lock.iter() {
         println!("* Genre [{}] | Song count: {}", genres.0, genres.1.len())
     }
 
@@ -69,16 +68,14 @@ async fn main() {
         .await
         .unwrap();
 
-    let tracks = genre_tracks
+    let tracks = genre_lock
         .get(&input)
         .unwrap()
         .iter()
         .map(|track_id| PlayableId::Track(track_id.clone()))
         .collect::<Vec<PlayableId>>();
-    
-    let _ = spotify
-        .playlist_add_items(playlist.id, tracks, None)
-        .await;
+
+    let _ = spotify.playlist_add_items(playlist.id, tracks, None).await;
 }
 
 fn init_spotify() -> AuthCodeSpotify {
