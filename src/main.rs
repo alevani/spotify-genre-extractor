@@ -20,11 +20,11 @@ async fn main() {
     spotify.prompt_for_token(&url).await.unwrap();
 
     // Create a shared state for genre_tracks
-    let genre_tracks: HashMap<String, Vec<TrackId>> = HashMap::new();
-        
+    let mut genre_tracks: HashMap<String, Vec<TrackId>> = HashMap::new();
+
     // Create a shared state for genre_tracks
-    let artist_ids: Arc<Mutex<Vec<ArtistId>>> =
-        Arc::new(Mutex::new(Vec::new()));
+    let artist_ids: Arc<Mutex<HashMap<ArtistId, Vec<TrackId>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
 
     spotify
         .current_user_saved_tracks(None)
@@ -37,30 +37,34 @@ async fn main() {
                     let track = track_data.track;
                     let track_id = track.id.unwrap();
                     let artist_id = track.artists.first().unwrap().id.clone().unwrap();
-                    
-                    artist_ids.lock().await.push(artist_id);
-                         
-                    
+
+                    artist_ids
+                        .lock()
+                        .await
+                        .entry(artist_id)
+                        .or_default()
+                        .push(track_id);
                 }
             }
         })
         .await;
 
-    for aid in artist_ids.lock().await.into_iter() {
-        
-        for genre in spotify.artist(aid).await.unwrap().genres {
-                            genre_tracks
-                                .await
-                                .entry(genre)
-                                .or_default()
-                                .push(track_id.clone())
-                        }
+    // ¯\_(ツ)_/¯
+    let artist_ids_locked = artist_ids.lock().await;
+    for (aid, vtid) in artist_ids_locked.iter() {
+        for genre in spotify.artist(aid.to_owned()).await.unwrap().genres {
+            genre_tracks
+                .entry(genre)
+                .or_default()
+                .append(&mut vtid.clone())
+        }
     }
 
-
-    for genres in genre_lock.iter() {
-        println!("* Genre [{}] | Song count: {}", genres.0, genres.1.len())
+    for genres in genre_tracks.iter() {
+        print!("* Genre [{}] | Song count: {} <> ", genres.0, genres.1.len())
     }
+
+    panic!();
 
     let mut input = String::new();
     let _ = io::stdin().read_line(&mut input);
@@ -77,7 +81,7 @@ async fn main() {
         .await
         .unwrap();
 
-    let tracks = genre_lock
+    let tracks = genre_tracks
         .get(&input)
         .unwrap()
         .iter()
