@@ -1,7 +1,11 @@
 use std::collections::HashMap;
+use std::io;
 
-use futures_util::StreamExt;
-use rspotify::{model::TrackId, prelude::*, scopes, AuthCodeSpotify, Config, Credentials, OAuth};
+use rspotify::{
+    model::TrackId,
+    prelude::*,
+    scopes, AuthCodeSpotify, Config, Credentials, OAuth,
+};
 
 #[tokio::main]
 async fn main() {
@@ -12,50 +16,51 @@ async fn main() {
 
     // Obtaining the access token
     let url = spotify.get_authorize_url(false).unwrap();
+
     // This function requires the `cli` feature enabled.
     spotify.prompt_for_token(&url).await.unwrap();
 
-    // todo use streams, as this is awefully slow
-    let all_saved_tracks = spotify
-        .current_user_saved_tracks(None)
-        .take(2000) // todo to delete
-        .collect::<Vec<_>>()
-        .await
-        .into_iter()
-        .filter(|track| track.is_ok());
-
-    println!("saved tracks");
-
+    let mut i = 0;
     let mut genre_tracks: HashMap<String, Vec<TrackId<'static>>> = HashMap::new();
 
-    // Collect and save a list of all genre for each track's artists into a Hashmap
-    for track_data in all_saved_tracks.into_iter().take(2932) {
-        let track = track_data.unwrap().track;
+    while let Ok(paginated_tracks) = spotify
+        .current_user_saved_tracks_manual(None, Some(100), Some(i))
+        .await
+    {
+        for t in paginated_tracks.items {
+            let track = t.track;
+            let track_id = track.id.unwrap();
 
-        let track_id = track.id.unwrap();
+            let artist_id = track.artists.first().unwrap().id.clone().unwrap();
 
-        let taid = track.artists.first().unwrap().id.clone().unwrap();
-
-        // todo here I can keep a reference of the passed through artists .. 
-        let genres = spotify.artist(taid).await.unwrap().genres;
-
-        for genre in genres {
-            genre_tracks
-                .entry(genre)
-                .or_insert(Vec::new())
-                .push(track_id.clone());
+            spotify
+                .artist(artist_id)
+                .await
+                .unwrap()
+                .genres
+                .into_iter()
+                .for_each(|genre| {
+                    genre_tracks
+                        .entry(genre)
+                        .or_default()
+                        .push(track_id.clone())
+                });
         }
+        i += 100;
     }
-    println!("track data");
 
-    // for genres in genre_tracks.clone() {
-    //     println!("* Genre [{}] | Song count: {}", genres.0, genres.1.len())
-    // }
+    for genres in genre_tracks.clone() {
+        println!("* Genre [{}] | Song count: {}", genres.0, genres.1.len())
+    }
+
+    let mut input = String::new();
+    let _ = io::stdin().read_line(&mut input);
+
     let user_id = spotify.me().await.unwrap().id;
     let playlist = spotify
         .user_playlist_create(
             user_id,
-            "Auto Generated uk dance Playlist",
+            &format!("Auto Generated <{input}> Playlist"),
             Some(true),
             Some(false),
             Some("Auto-Generated playlist containing music from the same genre"),
@@ -63,15 +68,15 @@ async fn main() {
         .await
         .unwrap();
 
-    let some_french_hip_hop_tracks = genre_tracks
-        .get("uk dance")
+    let tracks = genre_tracks
+        .get(&input)
         .unwrap()
         .iter()
         .map(|track_id| PlayableId::Track(track_id.clone()))
         .collect::<Vec<PlayableId>>();
-    println!("Some");
+    
     let _ = spotify
-        .playlist_add_items(playlist.id, some_french_hip_hop_tracks, None)
+        .playlist_add_items(playlist.id, tracks, None)
         .await;
 }
 
