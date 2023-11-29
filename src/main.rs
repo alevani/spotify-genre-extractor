@@ -20,9 +20,8 @@ async fn main() {
     spotify.prompt_for_token(&url).await.unwrap();
 
     // Create a shared state for genre_tracks
-    let genre_tracks: Arc<Mutex<HashMap<String, Vec<TrackId>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
-    
+    let genre_tracks: HashMap<String, Vec<TrackId>> = HashMap::new();
+        
     // Create a shared state for genre_tracks
     let artist_ids: Arc<Mutex<Vec<ArtistId>>> =
         Arc::new(Mutex::new(Vec::new()));
@@ -41,20 +40,24 @@ async fn main() {
                     
                     artist_ids.lock().await.push(artist_id);
                          
-                    // for genre in spotify.artist(artist_id).await.unwrap().genres {
-                    //     genre_tracks
-                    //         .lock()
-                    //         .await
-                    //         .entry(genre)
-                    //         .or_default()
-                    //         .push(track_id.clone())
-                    // }
+                    
                 }
             }
         })
         .await;
 
-    let genre_lock = genre_tracks.lock().await;
+    for aid in artist_ids.lock().await.into_iter() {
+        
+        for genre in spotify.artist(aid).await.unwrap().genres {
+                            genre_tracks
+                                .await
+                                .entry(genre)
+                                .or_default()
+                                .push(track_id.clone())
+                        }
+    }
+
+
     for genres in genre_lock.iter() {
         println!("* Genre [{}] | Song count: {}", genres.0, genres.1.len())
     }
