@@ -29,7 +29,6 @@ async fn main() {
     spotify
         .current_user_saved_tracks(None)
         .for_each_concurrent(None, |t| {
-            let spotify = spotify.clone();
             let artist_ids = Arc::clone(&artist_ids); // Clone the Arc for the shared state
 
             async move {
