@@ -23,6 +23,7 @@ async fn main() {
     let mut i = 0;
     let mut genre_tracks: HashMap<String, Vec<TrackId<'static>>> = HashMap::new();
 
+    // I should use concurrency here and just poll x pages at the same time
     while let Ok(paginated_tracks) = spotify
         .current_user_saved_tracks_manual(None, Some(100), Some(i))
         .await
