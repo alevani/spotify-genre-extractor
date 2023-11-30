@@ -1,4 +1,5 @@
 use std::io;
+use std::ops::Deref;
 use std::{collections::HashMap, sync::Arc};
 use tokio::time::{sleep, Duration};
 
@@ -17,13 +18,6 @@ async fn fetch_artist_genres_with_retry(
 
     while result.is_err() {
         println!("Hitting spotify API rate limit .. sleeping 80s");
-        
-        // let mut sleep_c = 81;
-        // while sleep_c > 0 {
-        //     sleep(Duration::from_millis(1000)).await;
-        //     sleep_c -= 1;
-        //     println!("{sleep_c} .. ");
-        // }
         sleep(Duration::from_millis(80000)).await;
         result = spotify.artist(aid.to_owned()).await;
     }
@@ -84,13 +78,28 @@ async fn main() {
     );
 
     for (index, (aid, vtid)) in artist_ids_locked.iter().enumerate() {
-        println!("[{index}/{}] Artist: {aid}", artist_ids_locked.keys().count());
-        for genre in fetch_artist_genres_with_retry(&spotify, aid).await {
-            println!(" - {genre}");
+        println!(
+            "[{index}/{}] Artist: {aid}",
+            artist_ids_locked.keys().count()
+        );
+
+        let genre = fetch_artist_genres_with_retry(&spotify, aid).await;
+        let genre_iter = genre.iter();
+
+        if genre_iter.count() == 0 {
+            println!(" - Unknown genre");
             genre_tracks
-                .entry(genre)
+                .entry("unknown genre".to_string())
                 .or_default()
                 .append(&mut vtid.clone())
+        } else {
+            for genre in fetch_artist_genres_with_retry(&spotify, aid).await {
+                println!(" - {genre}");
+                genre_tracks
+                    .entry(genre)
+                    .or_default()
+                    .append(&mut vtid.clone())
+            }
         }
     }
 
@@ -120,14 +129,27 @@ async fn main() {
         .await
         .unwrap();
 
-    let tracks = genre_tracks
-        .get(&input)
-        .unwrap()
-        .iter()
-        .map(|track_id| PlayableId::Track(track_id.clone()))
-        .collect::<Vec<PlayableId>>();
+    // This is equivalent to chunking, however the chunk API has limit and I ain't running no nightly here
+    let mut track_count = 0;
+    let mut tracks: Vec<Vec<PlayableId>> = Vec::new();
+    let mut track_record: Vec<PlayableId> = Vec::new();
 
-    let _ = spotify.playlist_add_items(playlist.id, tracks, None).await;
+    for track_id in genre_tracks.get(&input).unwrap() {
+        if track_count == 99 {
+            track_count = 0;
+            tracks.push(track_record);
+            track_record = Vec::new();
+        }
+
+        track_record.push(PlayableId::Track(track_id.clone()));
+        track_count += 1;
+    }
+
+    for chunk in tracks {
+        let _ = spotify
+            .playlist_add_items(playlist.id.clone(), chunk, None)
+            .await;
+    }
 }
 
 fn init_spotify() -> AuthCodeSpotify {
