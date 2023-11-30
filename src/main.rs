@@ -28,6 +28,7 @@ async fn main() {
     let artist_ids: Arc<Mutex<HashMap<ArtistId, Vec<TrackId>>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
+    println!("Fetching current saved tracks ..");
     spotify
         .current_user_saved_tracks(None)
         .for_each_concurrent(None, |t| {
@@ -49,7 +50,9 @@ async fn main() {
             }
         })
         .await;
-
+    
+    println!("Current saved tracks fetched.");
+    println!("Retrieving genre by artist ..");
     // ¯\_(ツ)_/¯
     let artist_ids_locked = artist_ids.lock().await;
     for (aid, vtid) in artist_ids_locked.iter() {
@@ -60,6 +63,8 @@ async fn main() {
                 .append(&mut vtid.clone())
         }
     }
+
+    println!(".. Done !");
 
     for genres in genre_tracks.iter() {
         print!(
