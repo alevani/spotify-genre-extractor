@@ -1,5 +1,6 @@
 use std::io;
 use std::{collections::HashMap, sync::Arc};
+use tokio::time::{sleep, Duration};
 
 use futures_retry::{RetryPolicy, StreamRetryExt};
 
@@ -7,6 +8,18 @@ use futures_util::lock::Mutex;
 use futures_util::StreamExt;
 use rspotify::model::ArtistId;
 use rspotify::{model::TrackId, prelude::*, scopes, AuthCodeSpotify, Config, Credentials, OAuth};
+
+async fn fetch_artist_genres_with_retry(spotify: &AuthCodeSpotify, aid: &ArtistId<'_>) -> Vec<String> {
+    let mut result = spotify.artist(aid.to_owned()).await;
+
+    while result.is_err() {
+        println!("Hitting spotify API rate limit .. sleeping 80s");
+        sleep(Duration::from_millis(80000)).await;
+        result = spotify.artist(aid.to_owned()).await;
+    }
+
+    result.unwrap().genres
+}
 
 #[tokio::main]
 async fn main() {
@@ -32,6 +45,7 @@ async fn main() {
     spotify
         .current_user_saved_tracks(None)
         .for_each_concurrent(None, |t| {
+            print!(".");
             let artist_ids = Arc::clone(&artist_ids); // Clone the Arc for the shared state
 
             async move {
@@ -51,12 +65,15 @@ async fn main() {
         })
         .await;
     
-    println!("Current saved tracks fetched.");
-    println!("Retrieving genre by artist ..");
-    // ¯\_(ツ)_/¯
     let artist_ids_locked = artist_ids.lock().await;
+    
+    println!("\nCurrent saved tracks fetched.");
+    println!("Retrieving genre by artist for {} artists ..", artist_ids_locked.keys().count());
+    // ¯\_(ツ)_/¯
     for (aid, vtid) in artist_ids_locked.iter() {
-        for genre in spotify.artist(aid.to_owned()).await.unwrap().genres {
+        println!("Artist: {aid}");
+        for genre in fetch_artist_genres_with_retry(&spotify, aid).await {
+            println!(" - {genre}");
             genre_tracks
                 .entry(genre)
                 .or_default()
