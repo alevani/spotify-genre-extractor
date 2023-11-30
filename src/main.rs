@@ -1,6 +1,8 @@
 use std::io;
 use std::{collections::HashMap, sync::Arc};
 
+use futures_retry::{RetryPolicy, StreamRetryExt};
+
 use futures_util::lock::Mutex;
 use futures_util::StreamExt;
 use rspotify::model::ArtistId;
@@ -60,7 +62,11 @@ async fn main() {
     }
 
     for genres in genre_tracks.iter() {
-        print!("* Genre [{}] | Song count: {} <> ", genres.0, genres.1.len())
+        print!(
+            "* Genre [{}] | Song count: {} <> ",
+            genres.0,
+            genres.1.len()
+        )
     }
 
     panic!();
