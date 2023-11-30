@@ -9,11 +9,21 @@ use futures_util::StreamExt;
 use rspotify::model::ArtistId;
 use rspotify::{model::TrackId, prelude::*, scopes, AuthCodeSpotify, Config, Credentials, OAuth};
 
-async fn fetch_artist_genres_with_retry(spotify: &AuthCodeSpotify, aid: &ArtistId<'_>) -> Vec<String> {
+async fn fetch_artist_genres_with_retry(
+    spotify: &AuthCodeSpotify,
+    aid: &ArtistId<'_>,
+) -> Vec<String> {
     let mut result = spotify.artist(aid.to_owned()).await;
 
     while result.is_err() {
         println!("Hitting spotify API rate limit .. sleeping 80s");
+        
+        // let mut sleep_c = 81;
+        // while sleep_c > 0 {
+        //     sleep(Duration::from_millis(1000)).await;
+        //     sleep_c -= 1;
+        //     println!("{sleep_c} .. ");
+        // }
         sleep(Duration::from_millis(80000)).await;
         result = spotify.artist(aid.to_owned()).await;
     }
@@ -64,14 +74,17 @@ async fn main() {
             }
         })
         .await;
-    
+
     let artist_ids_locked = artist_ids.lock().await;
-    
+
     println!("\nCurrent saved tracks fetched.");
-    println!("Retrieving genre by artist for {} artists ..", artist_ids_locked.keys().count());
-    // ¯\_(ツ)_/¯
-    for (aid, vtid) in artist_ids_locked.iter() {
-        println!("Artist: {aid}");
+    println!(
+        "Retrieving genre by artist for {} artists ..",
+        artist_ids_locked.keys().count()
+    );
+
+    for (index, (aid, vtid)) in artist_ids_locked.iter().enumerate() {
+        println!("[{index}/{}] Artist: {aid}", artist_ids_locked.keys().count());
         for genre in fetch_artist_genres_with_retry(&spotify, aid).await {
             println!(" - {genre}");
             genre_tracks
@@ -84,17 +97,16 @@ async fn main() {
     println!(".. Done !");
 
     for genres in genre_tracks.iter() {
-        print!(
+        println!(
             "* Genre [{}] | Song count: {} <> ",
             genres.0,
             genres.1.len()
         )
     }
 
-    panic!();
-
-    let mut input = String::new();
-    let _ = io::stdin().read_line(&mut input);
+    // let mut input = String::new();
+    // let _ = io::stdin().read_line(&mut input);
+    let input = "french indie pop".to_string();
 
     let user_id = spotify.me().await.unwrap().id;
     let playlist = spotify
@@ -103,7 +115,7 @@ async fn main() {
             &format!("Programatically generated [{}] Playlist", input.to_uppercase()),
             Some(true),
             Some(false),
-            Some("Programatically generated playlist containing music from the same genre .. work in progress. It does have some major issues sorting genres as Spotify only attach the genre to an artist, a not the song itself."),
+            Some(&format!("This playlist contains all the [{}] songs extracted from a liked playlist. The content may not only contain the same genre, as Spotify attaches a genre to an artist, and not to a song, making it difficult to properly sort.", input.to_uppercase())),
         )
         .await
         .unwrap();
