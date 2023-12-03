@@ -1,5 +1,10 @@
 # Playlist-Maker
 
+# TODOs
+- Clap Args
+- Structure functions into files
+- More features..
+
 **Description:**
 Playlist-Maker is a command-line tool written in Rust for creating custom Spotify playlists. The tool allows you to extract any genre from your liked playlist and create a new playlist based on that genre.
 
