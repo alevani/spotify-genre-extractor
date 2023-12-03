@@ -11,8 +11,7 @@ Playlist-Maker is a command-line tool written in Rust for creating custom Spotif
    - Copy your Spotify client secret and ID to the `.env` file.
 
 2. **Syncing Data:**
-   - The program calls the genre API for each artist, which might be slow and lead to a 429 TOO MANY REQUESTS error.
-   - Simple retry logic has been added, but it's recommended to sync the data the first time with fewer songs.
+   - So far, the program calls the genre API for each artist, which, in my case, is awfully slow and may make you run into a 429 TOO MANY request error. I have added some very simple retry logic, for 80s as it's usually 80s..However, you should not have an issue running the program the first time, it only gets tricky if you have too many songs, or sync too many times without saving your metadatas.
    - To avoid issues, consider saving metadata. In `main.rs`, find the line:
      ```Rust
      let artists = get_metadata(false, &spotify).await;
