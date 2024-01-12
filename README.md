@@ -1,4 +1,4 @@
-# Playlist-Maker
+# A Spotify Playlist's Genre Extractor
 
 # TODOs
 - Clap Args
